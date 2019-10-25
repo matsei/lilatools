@@ -2,32 +2,32 @@ library("enspect")
 
 # correctly find correct leg formats
 test_that("LEG format example is correct",{
-  expect_true(check_legformat("BY_24215903-qsim+vhs"))
-  expect_true(check_legformat("BY_24215903-QVhS.lila"))
-  expect_true(check_legformat("BY_24215903-qsim+vhs"))
-  expect_true(check_legformat("BY_24215903-qvhs.lila"))
-  expect_true(check_legformat("BY_24215903-qvhs-e01.lila"))
-  expect_true(check_legformat("BY_24215903-qvhs-ice.lila"))
-  expect_true(check_legformat("BY_24215903-qvhs-e13-201805150000.lila"))
-  expect_true(check_legformat("BY_24215903-qvhs-e13-201805150000-LARSIM_WHM.lila"))
-  expect_true(check_legformat("BY_24215903-qvhs-e13-201805150000-LARSIM_WHM-201805100500.lila"))
-  expect_true(check_legformat("BY_24215903-tzugtsvhs-e13-201805150000-LARSIM_WHM-201805100500-VAR1.lila"))
-  expect_true(check_legformat("BY_24215903-qvhs-e13-201805150000-LARSIM_WHM-201805100500-VAR1.lila"))
+  expect_true(check_legformat("BY_24215903-qsim+vhs")$check)
+  expect_true(check_legformat("BY_24215903-QVhS.lila")$check)
+  expect_true(check_legformat("BY_24215903-qsim+vhs")$check)
+  expect_true(check_legformat("BY_24215903-qvhs.lila")$check)
+  expect_true(check_legformat("BY_24215903-qvhs-e01.lila")$check)
+  expect_true(check_legformat("BY_24215903-qvhs-ice.lila")$check)
+  expect_true(check_legformat("BY_24215903-qvhs-e13-201805150000.lila")$check)
+  expect_true(check_legformat("BY_24215903-qvhs-e13-201805150000-LARSIM_WHM.lila")$check)
+  expect_true(check_legformat("BY_24215903-qvhs-e13-201805150000-LARSIM_WHM-201805100500.lila")$check)
+  expect_true(check_legformat("BY_24215903-tzugtsvhs-e13-201805150000-LARSIM_WHM-201805100500-VAR1.lila")$check)
+  expect_true(check_legformat("BY_24215903-qvhs-e13-201805150000-LARSIM_WHM-201805100500-VAR1.lila")$check)
 })
 
 # correctly find false leg formats
 test_that("LEG format example is false",{
-  expect_false(check_legformat("BY_-qvhs.lila"))
-  expect_false(check_legformat("BY_24215903-qvhs-e13-201805150000-LARSIM WHM.lila"))
-  expect_false(check_legformat("BY_24215903-tzugtssim+vhs-ee1-201805150000-LARSIM_WHM-201805100500-VAR1.lila"))
-  expect_false(check_legformat("BY_24215903-tzugtssim+vhs-e1-201805150000-LARSIM_WHM-201805100500-VAR1.lila"))
-  expect_false(check_legformat("BY_24215903-tzugtssim+vhs–201805150000-LARSIM_WHM-201805100500-VAR1.lila"))
-  expect_false(check_legformat("BY_24215903-qvhs-e13-201805150000-LARSIM WHM-201805100500-VAR1.lila"))
-  expect_false(check_legformat("BY_24215903-qvhs-e13-201805150000–201805100500-VAR1.lila"))
-  expect_false(check_legformat("BY_24215903-qvhs-e13-201805150000-LARSIM_WHM-201805100500-.lila"))
-  expect_false(check_legformat("BY_24215903-qvhs-000-201805150000-LARSIM_WHM-201805100500-VAR1.lila"))
-  expect_false(check_legformat("BY_24215903-qvhs-000.lila"))
-  expect_false(check_legformat("BY_24215903-qvhs-000-000.lila"))
+  expect_false(check_legformat("BY_-qvhs.lila")$check)
+  expect_false(check_legformat("BY_24215903-qvhs-e13-201805150000-LARSIM WHM.lila")$check)
+  expect_false(check_legformat("BY_24215903-tzugtssim+vhs-ee1-201805150000-LARSIM_WHM-201805100500-VAR1.lila")$check)
+  expect_false(check_legformat("BY_24215903-tzugtssim+vhs-e1-201805150000-LARSIM_WHM-201805100500-VAR1.lila")$check)
+  expect_false(check_legformat("BY_24215903-tzugtssim+vhs–201805150000-LARSIM_WHM-201805100500-VAR1.lila")$check)
+  expect_false(check_legformat("BY_24215903-qvhs-e13-201805150000-LARSIM WHM-201805100500-VAR1.lila")$check)
+  expect_false(check_legformat("BY_24215903-qvhs-e13-201805150000–201805100500-VAR1.lila")$check)
+  expect_false(check_legformat("BY_24215903-qvhs-e13-201805150000-LARSIM_WHM-201805100500-.lila")$check)
+  expect_false(check_legformat("BY_24215903-qvhs-000-201805150000-LARSIM_WHM-201805100500-VAR1.lila")$check)
+  expect_false(check_legformat("BY_24215903-qvhs-000.lila")$check)
+  expect_false(check_legformat("BY_24215903-qvhs-000-000.lila")$check)
 })
 
 # check if testfile has fileheader
@@ -60,6 +60,7 @@ test_that("example eizellila file ist read",{
                                                        flusskilometer=63.693,
                                                        vorhersagezeitpunkt='08.09.2019 13:00',
                                                        kommentar='Abfluss Vorhersage',
-                                                       austauschkennung='RP_01320010-qvhs-d01-201908270700')))
+                                                       austauschkennung='RP_01320010-qvhs-d01-201908270700')
+                                       )))
 })
 

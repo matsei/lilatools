@@ -1,4 +1,5 @@
 # S3 class should suffice in this case
+#require(tidyverse)
 default_liladata_meta <- data.frame(station=NA_character_,
                                     datenart=NA_character_,
                                     dimension=NA_character_,
@@ -61,7 +62,7 @@ liladata <- function(data, meta){
   if (!is.data.frame(meta)) stop("meta must be a data.frame") else
     if (!all(colnames(default_liladata_meta)%in%colnames(meta))) stop("required columns are missing in provided meta information")
   # return object of class liladata
-  structure(list(data=tbl_df(data), meta=tbl_df(meta)), class="liladata")
+  structure(list(data=tibble::as_tibble(data), meta=tibble::as_tibble(meta)), class="liladata")
 }
 
 # calculate summary of class object
@@ -74,8 +75,11 @@ summary.liladata <- function(data){
 print.liladata <- function(data){
   cat("meta information:")
   print(data$meta)
+  # show the relevant variables
+  # mention non variing columns
   cat("data:")
   print(data$data)
+
 }
 
 # select a data.frame from liladata class
@@ -97,6 +101,7 @@ print.liladata <- function(data){
 #' @return data.frame mit den Spalten id, time, values und den gewählten Spalten mit Metainformationen.
 #' @export
 #' @family liladata_methods
+#' @import dplyr
 #'@seealso \code{\link{liladata}} für Informationen zur \code{\link{liladata}}-S3-Klasse, \code{\link[dplyr]{select}} für weitere Informationen über Auswahl-Funktionalitäten
 select.liladata <- function(.data, ...)
 {
@@ -107,10 +112,20 @@ select.liladata <- function(.data, ...)
   return(datadf)
 }
 
-# generate one data.frame from lila class
+#' Umwandeln von \code{liladata} in \code{data.frame}
+#'
+#' @param .data Objekt mit Klasse \code{liladata}
+#'
+#' @return Objekt mit Klasse \code{data.frame}
+#' @seealso data.frame
+#' @family liladata_methods
+#' @export
+#'
+#' @examples
 as.data.frame.liladata <- function(.data)
 {
   datadf <- merge(.data$data, .data$meta, by="id")
+  return(datadf)
 }
 
 # filter data
@@ -125,10 +140,58 @@ as.data.frame.liladata <- function(.data)
 #   return(datadf)
 # }
 
-# merge two liladata objects by appending rows
-rbind.liladata <- function(.x, .y)
+#' Zusammenfügen zweier \code{liladata}-Objekte
+#'
+#'Zwei Objekte mit Klasse \code{liladata} werden zusammengeführt. Dabei werden jeweils die Daten- und Metainformationen vereint. Dazu werden die ids angepasst, um Überschneidungen zwischen den beiden Objekten zu verhindern.
+#'
+#'Im Zuge der Zusammenführung werden die IDs der beiden Objekte zusammengeführt. Dabei wird verhindert, dass Überschneidungen auftreten. Die ID ist also unter Umständen nicht mehr mit der ID der originalen Datensätze identisch.
+#'
+#' @param x Objekt mit Klasse \code{liladata}
+#' @param y Objekt mit Klasse \code{liladata}
+#'
+#' @return Objekt mit Klasse \code{liladata}
+#' @export
+#' @family liladata_methods
+#' @examples
+merge_liladata <- function(x, y)
 {
-  # set source, if missing or identical x and y
+  # # set source, if missing or identical in x and y
+  # if(!"source" %in% colnames(x$meta))
+  #   x$meta$source <- "1"
+  # if(!"source" %in% colnames(y$meta))
+  #   if(any(grepl("^[[:digit:]]+$", x$meta$source)))
+  #     y$meta$source <- as.character(max(as.numeric(x$meta$source))+1)
+  #   else
+  #     y$meta$source <- 1
+  #   # check for duplicates
+  #   if(any(unique(y$meta$source) %in% unique(y$meta$source)))
+  #   {
+  #     duplicate_source <- unique(y$meta$source
+  #   }
   # set new id, depending on source
-  print("not finished")
+
+  # set new id independend of source
+  xid <- sapply(strsplit(x$meta$id, "-"), first)
+  new_yid <- as.numeric(sapply(strsplit(y$meta$id, "-"), first))
+  if (any(new_yid==0)) new_yid <- new_yid + 1
+  # set new main id by adding max of x id
+  new_yid <- new_yid + max(as.numeric(xid))
+  # generate full id by merging with old
+  new_yid <- paste(as.character(new_yid), gsub("^([0-9]+)-(.*)$", "\\2", y$meta$id), sep="-")
+  yid <- data.frame(old_id=y$meta$id,
+                    id=new_yid)
+  # replace old id with new id in y data
+  colnames(y$data) <- gsub("^id$", "old_id", colnames(y$data))
+  y$data <- merge(y$data, yid, by="old_id", all.x=T)
+  y$data <- y$data[, c("id", "time", "values")]
+  # replace old id with new id in y meta
+  colnames(y$meta) <- gsub("^id$", "old_id", colnames(y$meta))
+  y$meta <- merge(y$meta, yid, by="old_id", all.x=T)
+  y$meta <- dplyr::select(y$meta, -old_id)
+  y$meta$id <- as.character(y$meta$id)
+  # finally rbind data
+  x$data <- rbind(x$data, y$data)
+  # finally rbind meta
+  x$meta <- dplyr::bind_rows(x$meta, y$meta)
+  return(x)
 }

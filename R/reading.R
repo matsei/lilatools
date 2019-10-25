@@ -1,9 +1,10 @@
-# check requirements (only necessary if standalone script is distributed)
 #' Funktion zum Einlesen von Dateien im LILA format
 #'
 #' Die Funktion ermöglicht das Einlesen aller Varianten des LILA-Formats
 #'
 #'  LILA-Dateien in den LILA-Formaten SPALTE, EINZEL, BLOCK und hybrid können eingelesen werden. Für LILA-EINZEL ist eine vereinfachte und daher beschleunigte Routine implementiert, die über das Argument \code{lila_einzel=TRUE} aktiviert werden kann.
+#'
+#'  Wenn Dateien im Format LILA EINZEL eingelesen werden, kann die Option \code{filename_metainfo=TRUE} gesetzt werden, der Dateiname dem LEG-Format entspricht. DAnn werden die im Dateinamen enthaltenen Informationen den Metainformationen hinzugefügt.
 #'
 #' @param file path of file (char) to read
 #' @param lila_einzel hat einzulesende Datei das Format LILA-EINZEL (optional)
@@ -49,26 +50,51 @@ get_lila_filemeta <- function(file, encoding="latin1")
 #'
 #'
 #' @examples
-read_lila_einzel <- function(file, filename_metainfo=NA, encoding="latin1")
+read_lila_einzel <- function(file, filename_metainfo=FALSE, encoding="latin1")
 {
+  ####################
+  #read file name meta
+  ####################
+  if (filename_metainfo){
+    filename_meta <- check_legformat(basename(file))
+    if(!filename_meta$check) warning(paste("Dateiname entspricht nicht LEG-Format (filename_meta wird irgnoriert):", file))
+  }
   ####################
   #read file meta info
   ####################
   filemeta <- get_lila_filemeta(file)
   if (!identical(filemeta, NA)) skipmeta <- ncol(filemeta) else
     skipmeta <- 0
+  ####################
+  # read meta block
+  ####################
   # first determine length of header block
   header_length = min(grep(pattern="^[0-9]{2}.*", scan(file, what=character(), flush=T, sep=";", skip = skipmeta, encoding = encoding, quiet = T)))-1
   # read meta info from header block
   meta <- scan(file=file, what=list(character(), character()), sep=";", skip = skipmeta, na.strings = "-", nlines=header_length, encoding=encoding, quiet = T)
-  metadf <- data.frame(as.list(meta[[2]]))
-  colnames(metadf) <- meta[[1]]
+  metadf <- as.list(meta[[2]])
+  names(metadf) <- meta[[1]]
+  metadf <- as_tibble(metadf)
   # add sourcefile name to meta
   metadf$source <- file
   # add id
   metadf$id <- "1-1"
+  # add filename meta
+  if(filename_meta$check & filename_metainfo){
+    # compare datenart and datenursprung with meta
+    duplicate_cols <- colnames(filename_meta$leg_infos)[colnames(filename_meta$leg_infos) %in% colnames(metadf)]
+    identical_cols <- map_dfc(metadf[,c("datenart", "datenursprung")], tolower) == map_dfc(filename_meta$leg_infos[,c("datenart", "datenursprung")], tolower)
+    if (!all(identical_cols))
+      warning(paste("Daten", paste(collapse = ", ", colnames(identical_cols)[!identical_cols]),
+      "in Datei", file, "entsprechen nicht Angabe in Dateinamen (LEG-Format)"))
+    # add filename_meta info to meta info
+    metadf <- cbind(metadf, filename_meta$leg_infos[, !colnames(filename_meta$leg_infos) %in% colnames(metadf)])
+  }
+  # add file meta
+  if(!identical(filemeta, NA))
+    metadf <- cbind(metadf, ncol(filemeta))
   ####################
-  #read file meta info
+  #read data
   ####################
   values <- readr::read_delim(file=file, col_types = cols_only(col_datetime(format="%d.%m.%Y %H:%M"), col_double(), col_skip()), delim=";", skip = skipmeta + header_length, na="-", col_names=c("time", "values"),
                               locale=locale(decimal_mark = ".", date_names = "de", encoding=encoding))
@@ -105,7 +131,7 @@ get_block_col_types <- function(file, skip, encoding="latin1")
     first_col <- cols(col_datetime(format="%d.%m.%Y %H:%M")) else
       first_col <- cols(col_character())
   # check type of data columns
-  if(all(grepl(pattern = "^[[:digit:]]$", first_line[2:(1+n_datacol)])))
+  if(all(grepl(pattern = "^[0-9.]+$", first_line[2:(1+n_datacol)])))
     data_cols <- rep(cols(col_double())$cols, n_datacol) else
       data_cols <- rep(cols(col_character())$cols, n_datacol)
   # check if last column is empty
@@ -136,6 +162,11 @@ read_lila_block <- function(file, filename_metainfo=F, encoding="latin1")
   ####################
   #read file meta info
   ####################
+  # check file LEG format
+  if (filename_metainfo){
+    filename_meta <- check_legformat(basename(file))
+    if(!filename_meta$check) warning(paste("Dateiname entspricht nicht LEG-Format (filename_meta wird irgnoriert):", file))
+  }
   # check for header in
   filemeta <- get_lila_filemeta(file)
   if (!identical(filemeta, NA)) skipmeta <- ncol(filemeta) else
@@ -148,18 +179,18 @@ read_lila_block <- function(file, filename_metainfo=F, encoding="latin1")
   fileblocks$id <- paste("1", rep(1:(nrow(fileblocks)/2), each=2), sep="-")
   # read meta info from header blocks
   allmeta <- plyr::adply(.data=dplyr::filter(.data=fileblocks, !val), .margins=1, .fun=function(thisblock)
-    {
+  {
     col_types <- get_block_col_types(file=file, skip = skipmeta + thisblock$start -1, encoding=encoding)
     # read one meta info block
     meta <- readr::read_delim(file=file, delim=";", skip = skipmeta + thisblock$start -1, n_max=thisblock$end - thisblock$start +1, na="-",
                               locale=locale(decimal_mark = ".", date_names = "de", encoding=encoding),
-                              col_names=F, col_types = col_types)
+                              col_names=F, col_types = col_types, progress=F)
     meta <- t(meta)
     meta <- meta[!apply(is.na(meta), MARGIN=1, all),] # remove empty columns
     # create data frame
     colnames(meta) <- meta[1,]
     rownames(meta) <- 1:nrow(meta)
-    meta <- data.frame(meta)
+    meta <- data.frame(meta, stringsAsFactors=F)
     meta <- meta[-1,]
     rownames(meta) <- 1:nrow(meta)
     # remove unused factor levels
@@ -174,23 +205,36 @@ read_lila_block <- function(file, filename_metainfo=F, encoding="latin1")
   # add file meta info
   if (!identical(filemeta, NA))
     allmeta <- cbind(allmeta, filemeta)
+  # add filename meta
+  if(filename_metainfo)
+    if (filename_meta$check){
+      # compare datenart and datenursprung with meta
+      duplicate_cols <- colnames(filename_meta$leg_infos)[colnames(filename_meta$leg_infos) %in% colnames(allmeta)]
+      identical_cols <- purrr::map_dfc(allmeta[,c("datenart", "datenursprung")], tolower) == purrr::map_dfc(filename_meta$leg_infos[,c("datenart", "datenursprung")], tolower)
+      if (!all(identical_cols))
+        warning(paste("Daten", paste(collapse = ", ", colnames(identical_cols)[!identical_cols]),
+                      "in Datei", file, "entsprechen nicht Angabe in Dateinamen (LEG-Format)"))
+      # add filename_meta info to meta info
+      allmeta <- cbind(allmeta, filename_meta$leg_infos[, !colnames(filename_meta$leg_infos) %in% colnames(allmeta)])
+    }
+
   # add sourcefile name to meta
   allmeta$source <- file
   # lower case column names
   colnames(allmeta) <- tolower(colnames(allmeta))
+  #TODO fix issues occurring due to factors by working with tibble
   ####################
   #read file values
   ####################
-  # read meta info from header blocks
+  # read data blocks
   alldata <- plyr::adply(.data=dplyr::filter(.data=fileblocks, val), .margins=1, .fun=function(thisblock)
   {
     col_types <- get_block_col_types(file=file, skip = skipmeta + thisblock$start -1, encoding=encoding)
-    # read one meta info block
+    # read one data block
     data <- readr::read_delim(file=file, delim=";", skip = skipmeta + thisblock$start -1,
                               n_max=thisblock$end - thisblock$start +1, na="-",
                               locale=locale(decimal_mark = ".", date_names = "de", encoding=encoding, time_format="%d.%m.%Y %H:%M"),
-                              #col_types = col_types)
-                              col_types = col_types,
+                              col_types = col_types, progress = F,
                               col_names = F)
     # set column names
     colnames(data) <- c("time", paste("c", 1:(ncol(data)-1), sep="_"))
@@ -211,20 +255,77 @@ read_lila_block <- function(file, filename_metainfo=F, encoding="latin1")
 }
 
 
-read_lila_spalte <- function(file, filename_metainfo=NA)
-{
-  indata <- readr::read_csv2(file=file)
-  data <- indata
-  return(data)
-}
+#' Dateinamen im LEG-Format prüfen und zerlegen
+#'
+#' Die Konformatität des Dateinamens mit den Vorgaben zum LEG-Format werden geprüft. Die einzelnen Informationen im Dateinamen werden extrahiert
 
-# check if filename resembles the standard format (LEG)
+#' @param filename zu prüfender Dateiname (character)
+#'
+#' @return \code{list} mit den Elementen \code{check} (logische Angabe ob file dem Format entspricht) und \code{leg_format} (Informationen im Dateinamen als \code{data.frame})
+#' @export
+#'
+#' @examples
+#' check_legformat("BY_24215903-tzugtsvhs-e13-201805150000-LARSIM_WHM-201805100500-VAR1.lila")
+#' check_legformat("BY_24215903-qvhs.lila")
 check_legformat <- function(filename)
 {
   # add .lila, if missing
   if (!grepl(pattern = ".lila$", filename))
     filename <- paste(filename, ".lila", sep="")
-  check <- grepl(pattern = "(.*)(^[[:alpha:]]{2,3})_([[:digit:]]+)-(q|w|twas|tzugts|Q|W|TWAS|TZUGTS)([mesivhabpMESIVHABP+]+)(-([[:lower:]]{1}[[:digit:]]{2}|[[:lower:]]{3}))?(-([[:digit:]]{12}))?(-([a-zA-Z_^ ]+))?(-([[:digit:]]{12}))?(-([a-zA-Z_0-9^ ]+))?.lila$", filename)
-  #check <- grepl(pattern = "(.*)(^[[:alpha:]]{2,3})_([[:digit:]]+)-(Q|W|TWAS|TZUGTS)(mes|sim|vhs|abs|p*_|-)(-([[:lower:]]{1}[[:digit:]]{2}|[[:lower:]]{3}))?(-([[:digit:]]{12}))?(-([:alpha:]+))?(-([:digit:]]{12}))?(-([[:alpha:]]+))?(.lila$)?", filename)
-  return(check)
+  # patterns to check
+  patterns <- list(pegelkennung = "^([[:alpha:]]{2,3}_[[:digit:]]+)",
+                   datenart = "-(q|w|twas|tzugts|Q|W|TWAS|TZUGTS)",
+                   datenursprung = "([mesivhabpMESIVHABP+]+)",
+                   vhs_met = "-([[:lower:]]{1}[[:digit:]]{2}|[[:lower:]]{3})",
+                   vzp_met = "-([0-9]{12})",
+                   vhs_hyd = "-([a-zA-Z_^]+)",
+                   vzp_hyd = "-([0-9]{12})",
+                   var = "-([a-zA-Z_0-9^ ]+)",
+                   lila = "[.]{1}lila$")
+
+  # general check
+  if(!grepl(pattern = paste(sep="", patterns$pegelkenn, patterns$datenart, patterns$datenursprung, ".*", patterns$lila), filename)){
+    check <- F
+    leg_infos <- NA
+  } else {
+    check <- T
+    # get required info
+    leg_infos <- list()
+    for (i in 1:3){
+      thisinfo <- gsub(paste(paste(collapse="", patterns[1:3]), ".*", sep=""), paste(sep="", "\\", i), filename)
+      names(thisinfo) <- names(patterns)[i]
+      leg_infos <- append(leg_infos, thisinfo)
+    }
+    # get flex part (after datenursprung)
+    flex <- gsub(paste(sep="", patterns$pegelkenn, patterns$datenart, patterns$datenursprung, "(.*)", patterns$lila), "\\4", filename)
+    if (nchar(flex)>0){
+      # split flex part
+      flexparts <- strsplit(flex, "-")[[1]][-1]
+      # catch special format error
+      if (grepl("-$", flex)) flexparts <- append(flexparts, "")
+      # iterate patterns
+      flex_ok <- T
+      i <- 1
+      while(flex_ok & i<=length(flexparts)){
+        if (grepl(paste(sep="", "^", gsub("^-","", patterns[3+i]), "$"), flexparts[i])){
+          thisinfo <- list(flexparts[i])
+          names(thisinfo) <- names(patterns)[3+i]
+          leg_infos <- append(leg_infos, thisinfo)
+          i <- i+1
+        } else
+        {
+          check <- F
+          flex_ok <- F
+        }
+      }
+    }
+    # set default for var, im missing
+    if (!"var" %in% colnames(leg_infos))
+      leg_infos$var <- ""
+    leg_infos <- tibble::as_tibble(leg_infos)
+  }
+  # prepare result
+  out <- list(check=check,
+              leg_infos=leg_infos)
+  return(out)
 }
