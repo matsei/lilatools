@@ -112,7 +112,7 @@ select.liladata <- function(.data, ...)
   return(datadf)
 }
 
-#' Umwandeln von \code{liladata} in \code{data.frame}
+#' Umwandeln von \code{liladata} in \code{data.frame}. Dabei werden alle Metinformationen mit den Werten zusammengeführt.
 #'
 #' @param .data Objekt mit Klasse \code{liladata}
 #'

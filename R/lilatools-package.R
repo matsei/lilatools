@@ -18,8 +18,9 @@
 #' }
 #' Weitere Funktionen ermöglichen das Umwandeln und Auswählen der erforderlichen Daten aus einem Objekt der \code{liladata}-Klasse:
 #' \describe{
-#' \item{\code{as.data.frame}}{Umwandlung in data.frame unter Beibehaltung aller Metadaten}
+#' \item{\code{\link{as.data.frame.liladata}}}{Umwandlung in data.frame unter Beibehaltung aller Metadaten}
 #' \item{\code{\link{select.liladata}}}{Auswahl der gewünschten Metainformationen, die dann mit den Werten in einem data.frame zusammengeführt werden.}
+#' \item{\code{\link{merge_liladata}}}{Zwei Objekte mit Klasse \code{liladata} werden zusammengeführt.}
 #' }
 #'
 #'
