@@ -1,7 +1,7 @@
 Package: lilatools
 Type: Package
 Title: Reading files in LILA format
-Version: 0.1.0
+Version: 0.2.0
 Author: Mathias Seibert and Margret Johst
 Maintainer: Mathias Seibert <mathias.seibert@hydron-gmbh.de>
 Description: The LILA format is a formatting standard for ASCII files employed by the water balance model LARSIM. There are three different variants of the LILA format: LILA EINZEL, LILA BLOCK, LILA SPALTE. This package introduces functions to read files in all of these LILA format variants.
@@ -10,7 +10,8 @@ Encoding: UTF-8
 LazyData: true
 Imports:
   tidyverse, 
-  plyr
+  plyr,
+  dplyr
 Suggests:
     testthat,
     knitr,

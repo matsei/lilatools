@@ -45,12 +45,19 @@ default_liladata_data <- data.frame(id=NA_integer_, time=NA, values=NA_real_)
 #'
 #' # example object
 #' liladata(data=data.frame(id="1-1",
-#' time=c("09.09.2019 00:00", "09.09.2019 01:00", "09.09.2019 02:00", "09.09.2019 03:00", "09.09.2019 04:00", "09.09.2019 00:50"),
-#' values=c(0.9, 0.9, 0.9, 0.9, 0.8, 0.8)),
-#' meta=data.frame(id='1-1', station="Rebbelroth", gewaesser="Agger", stationsnummer=01320010, stationskennung='REBR',
-#' datenart='Q',dimension='cbm/s', datenbezug='GTS', zeitintervall='01:00', datentyp='M',
-#' datenursprung='vhs', flaeche=109.860, flusskilometer=63.693, vorhersagezeitpunkt='08.09.2019 13:00',
-#' kommentar='Abfluss Vorhersage', austauschkennung='RP_01320010-qvhs-d01-201908270700'))
+#'                          time=c("09.09.2019 00:00", "09.09.2019 01:00", "09.09.2019 02:00",
+#'                                 "09.09.2019 03:00", "09.09.2019 04:00", "09.09.2019 00:50"),
+#'                          values=c(0.9, 0.9, 0.9, 0.9, 0.8, 0.8)),
+#'          meta=data.frame(id='1-1', station="Rebbelroth", gewaesser="Agger",
+#'                          stationsnummer=01320010, stationskennung='REBR',
+#'                          datenart='Q',dimension='cbm/s', datenbezug='GTS',
+#'                          zeitintervall='01:00', datentyp='M',
+#'                          datenursprung='vhs', flaeche=109.860, flusskilometer=63.693,
+#'                          vorhersagezeitpunkt='08.09.2019 13:00',
+#'                          kommentar='Abfluss Vorhersage',
+#'                          austauschkennung='RP_01320010-qvhs-d01-201908270700'
+#'                          )
+#'                          )
 liladata <- function(data, meta){
   if(missing(data))
     data <- default_liladata_data
@@ -98,7 +105,7 @@ print.liladata <- function(data){
 #' @param .data Objekt der Klasse \code{liladata}
 #' @param ... Auswahl der gewünschten Spalten, getrennt durch Kommas
 #'
-#' @return data.frame mit den Spalten id, time, values und den gewählten Spalten mit Metainformationen.
+#' @return data.frame mit den Spalten id, time, values ad_lilaund den gewählten Spalten mit Metainformationen.
 #' @export
 #' @family liladata_methods
 #' @import dplyr
@@ -122,6 +129,8 @@ select.liladata <- function(.data, ...)
 #' @export
 #'
 #' @examples
+#' data <- read_lila_block(system.file("extdata", "exp_lilablock.lila", package="lilatools"))
+#' as.data.frame(data)
 as.data.frame.liladata <- function(.data)
 {
   datadf <- merge(.data$data, .data$meta, by="id")
@@ -153,6 +162,9 @@ as.data.frame.liladata <- function(.data)
 #' @export
 #' @family liladata_methods
 #' @examples
+#' x <- read_lila_block(system.file("extdata", "exp_lilablock.lila", package="lilatools"))
+#' y <- read_lila_einzel(system.file("extdata", "exp_lilaeinzel.lila", package="lilatools"))
+#' merge_liladata(x, y)
 merge_liladata <- function(x, y)
 {
   # # set source, if missing or identical in x and y

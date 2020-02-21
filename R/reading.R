@@ -14,6 +14,9 @@
 #' @export
 #' @family read_lila
 #' @examples
+#' read_lila(system.file("extdata", "exp_lilaeinzel.lila", package="lilatools"))
+#' read_lila(system.file("extdata", "exp_lilaeinzel.lila", package="lilatools"), lila_einzel=T)
+#' read_lila(system.file("extdata", "exp_lilablock.lila", package="lilatools"))
 read_lila <- function(file, lila_einzel=FALSE, ...)
 {
   if (lila_einzel)
@@ -39,19 +42,29 @@ get_lila_filemeta <- function(file, encoding="latin1")
 
 #' Lesen von Dateien im LILA-EINZELDATEI-Format
 #'
-#' @param file Pfad der zu lesenden Datei
-#' @param inspect_filename logisch (default: FALSE), inspiziert Dateinamen mit Standardformat nach zusätzlichen Metainformationen (siehe Details)
+#'Die Funktion ist optimiert fürs Einlesen von Dateien im LILA-EINZELDATEI-Format
 #'
 #'Eine Datei im LARSIM format LILA EINZELDATEI wird eingelesen. Abweichende LILA-Formate können nicht gelesen werden.
 #'Wenn der der Dateiname der 'Formatdefinition der Austauschkennung zum länderübergreifenden Austausch von Vorhersagen V 1.0' (LEG) entsprcht, werden bei angabe der der Option inspect_filename zusätzliche Informationen aus dem Dateinamen entnommen.
+#'
+#'Die Lokaleinstellungen mit \code{locale} umfassen zB die Einstellungen für das Dateiencoding. In der Regel muss daran nichts geändert werden. Allerdings empfiehlt es sich das locale extern als Variable zu speichern und vorzugeben, wenn viele Dateien eingelesen werden. Dann wird das Einlesen erheblich beschleunigt.
+#' @param file Pfad der zu lesenden Datei
+#' @param filename_metainfo logisch (default: FALSE), inspiziert Dateinamen mit Standardformat nach zusätzlichen Metainformationen (siehe Details)
+#' @param locale Lokaleinstellungen, können extern vorgegeben werden, default: locale(decimal_mark = ".", date_names = "de", encoding="latin1")
+#' @param n_max maximale Anzahl an Zeilen, die aus dem Datenblock (also unterhalb der Metadaten) eingelesen werden
 #' @return Objekt der Klasse \code{\link{liladata}}
 #' @export
 #' @family read_lila
 #'
 #'
 #' @examples
-read_lila_einzel <- function(file, filename_metainfo=FALSE, encoding="latin1")
+#' read_lila_einzel(system.file("extdata", "exp_lilaeinzel.lila", package="lilatools"))
+
+read_lila_einzel <- function(file, filename_metainfo=FALSE, locale="default", n_max=Inf)
 {
+  #set default locale
+  if(first(locale=="default"))
+    locale <- locale(decimal_mark = ".", date_names = "de", encoding="latin1")
   ####################
   #read file name meta
   ####################
@@ -69,9 +82,9 @@ read_lila_einzel <- function(file, filename_metainfo=FALSE, encoding="latin1")
   # read meta block
   ####################
   # first determine length of header block
-  header_length = min(grep(pattern="^[0-9]{2}.*", scan(file, what=character(), flush=T, sep=";", skip = skipmeta, encoding = encoding, quiet = T)))-1
+  header_length = min(grep(pattern="^[0-9]{2}.*", scan(file, what=character(), flush=T, sep=";", skip = skipmeta, encoding = locale()$encoding, quiet = T)))-1
   # read meta info from header block
-  meta <- scan(file=file, what=list(character(), character()), sep=";", skip = skipmeta, na.strings = "-", nlines=header_length, encoding=encoding, quiet = T)
+  meta <- scan(file=file, what=list(character(), character()), sep=";", skip = skipmeta, na.strings = "-", nlines=header_length, encoding=locale()$encoding, quiet = T)
   metadf <- as.list(meta[[2]])
   names(metadf) <- meta[[1]]
   metadf <- as_tibble(metadf)
@@ -80,24 +93,35 @@ read_lila_einzel <- function(file, filename_metainfo=FALSE, encoding="latin1")
   # add id
   metadf$id <- "1-1"
   # add filename meta
-  if(filename_meta$check & filename_metainfo){
-    # compare datenart and datenursprung with meta
-    duplicate_cols <- colnames(filename_meta$leg_infos)[colnames(filename_meta$leg_infos) %in% colnames(metadf)]
-    identical_cols <- map_dfc(metadf[,c("datenart", "datenursprung")], tolower) == map_dfc(filename_meta$leg_infos[,c("datenart", "datenursprung")], tolower)
-    if (!all(identical_cols))
-      warning(paste("Daten", paste(collapse = ", ", colnames(identical_cols)[!identical_cols]),
-      "in Datei", file, "entsprechen nicht Angabe in Dateinamen (LEG-Format)"))
-    # add filename_meta info to meta info
-    metadf <- cbind(metadf, filename_meta$leg_infos[, !colnames(filename_meta$leg_infos) %in% colnames(metadf)])
-  }
+  if(filename_metainfo)
+    if(filename_meta$check){
+      # compare datenart and datenursprung with meta
+      duplicate_cols <- colnames(filename_meta$leg_infos)[colnames(filename_meta$leg_infos) %in% colnames(metadf)]
+      identical_cols <- map_dfc(metadf[,c("datenart", "datenursprung")], tolower) == map_dfc(filename_meta$leg_infos[,c("datenart", "datenursprung")], tolower)
+      if (!all(identical_cols))
+        warning(paste("Daten", paste(collapse = ", ", colnames(identical_cols)[!identical_cols]),
+                      "in Datei", file, "entsprechen nicht Angabe in Dateinamen (LEG-Format)"))
+      # add filename_meta info to meta info
+      metadf <- cbind(metadf, filename_meta$leg_infos[, !colnames(filename_meta$leg_infos) %in% colnames(metadf)])
+    }
   # add file meta
   if(!identical(filemeta, NA))
     metadf <- cbind(metadf, ncol(filemeta))
   ####################
   #read data
   ####################
+  # values <- read.csv(file=file, colClasses = c("character", "numeric", "NULL"), sep=";", skip = skipmeta + header_length, header=F, na.strings="-",
+  #                             nrows=n_max)
+  # colnames(values) <- c("time", "values")
+  # values$time <- as.POSIXct(strptime(format="%d.%m.%Y %H:%M", x=values$time)) # is this faster?
+
+  # original code with read_delim:
+  # values <- readr::read_delim(file=file, col_types = cols_only(col_datetime(format="%d.%m.%Y %H:%M"), col_double(), col_skip()), delim=";", skip = skipmeta + header_length, na="-", col_names=c("time", "values"),
+  #                             locale=locale(decimal_mark = ".", date_names = "de", encoding=encoding), n_max=n_max)
+  # changed with external locale
   values <- readr::read_delim(file=file, col_types = cols_only(col_datetime(format="%d.%m.%Y %H:%M"), col_double(), col_skip()), delim=";", skip = skipmeta + header_length, na="-", col_names=c("time", "values"),
-                              locale=locale(decimal_mark = ".", date_names = "de", encoding=encoding))
+                              locale=locale, n_max=n_max)
+
   values$id <- "1-1"
   ####################
   #merge meta and values to liladata class
@@ -128,15 +152,15 @@ get_block_col_types <- function(file, skip, encoding="latin1")
   n_datacol <- length(first_line)-2
   # check if first columns is time
   if(grepl(pattern = "[0-9]{2}.[0-9]{2}.[0-9]{4} [0-9]{2}:[0-9]{2}", first_line[1]))
-    first_col <- cols(col_datetime(format="%d.%m.%Y %H:%M")) else
-      first_col <- cols(col_character())
+    first_col <- readr::cols(col_datetime(format="%d.%m.%Y %H:%M")) else
+      first_col <- readr::cols(col_character())
   # check type of data columns
   if(all(grepl(pattern = "^[0-9.]+$", first_line[2:(1+n_datacol)])))
-    data_cols <- rep(cols(col_double())$cols, n_datacol) else
-      data_cols <- rep(cols(col_character())$cols, n_datacol)
+    data_cols <- rep(readr::cols(col_double())$cols, n_datacol) else
+      data_cols <- rep(readr::cols(col_character())$cols, n_datacol)
   # check if last column is empty
   if (last(first_line)=="")
-    last_col <- cols("-")$cols else
+    last_col <- readr::cols("-")$cols else
       last_col <- data_cols[1]
   # define expected column types
   col_types <- first_col
@@ -149,16 +173,31 @@ get_block_col_types <- function(file, skip, encoding="latin1")
 #'
 #' \code{read_lila_block} ist die flexibelste der \code{read_lila}-Funktionen: Sie kann neben dem Format LILA-BLOCK auch LILA EINZEL, LILA SPALTE und LILA-hybrid einlesen. Dabei bestehen aber Geschwindigkeitsnachteile.
 #'
+#'\code{locale} hat den folgenden default-Wert:
+#'
+#'locale(decimal_mark = ".", date_names = "de", encoding="latin1", time_format="\%d.\%m.\%Y \%H:\%M")
+#'
+#'Er kann verändert werden, wozu indem der angegebene Aufruf von locale kopiert wird und nach bedarf verändert wird. Dabei sollten die mindestens die verwendeten Parameter gesetzt werden.
+#'Es empfiehlt sich, \code{locale} mit den Standardparametern einmal für eine Session zu definieren, besonders wenn viele Dateien eingelesen werden sollen. Locale hat leider einen relativ großen Rechenbedarf beim Aufruf.
+#'Wenn es nur einmal aufgerufen wird hat das also große Geschwindigkeitsvorteile (siehe Beispiel).
 #' @param file Pfad zur einzuleseneden Datei
 #' @param filename_metainfo (logisch, default: FALSE) enthält der Dateipfad Metadaten, die importiert werden sollen?
+#' @param locale setzt einige wichtige Informationen für den Lesevorgang, default siehe Details
+#' @param n_max maximale Anzahl an Zeilen, die aus dem Datenblock (also unterhalb der Metadaten) eingelesen werden
 #'
 #' @return Objekt in liladata-Klasse
 #' @family read_lila
 #' @export
-#'
 #' @examples
-read_lila_block <- function(file, filename_metainfo=F, encoding="latin1")
+#' # read_lila_block(system.file("extdata", "exp_lilablock.lila", package="lilatools"))
+#' # locale extern aufrufen
+#' loc <- locale(decimal_mark = ".", date_names = "de", encoding="latin1")
+#' read_lila_block(system.file("extdata", "exp_lilablock.lila", package="lilatools"), locale=loc)
+read_lila_block <- function(file, filename_metainfo=F, locale="default", n_max=Inf)
 {
+  # set locale
+  if (first(locale=="default"))
+    locale <- locale(decimal_mark = ".", date_names = "de", encoding="latin1", time_format="%d.%m.%Y %H:%M")
   ####################
   #read file meta info
   ####################
@@ -180,10 +219,10 @@ read_lila_block <- function(file, filename_metainfo=F, encoding="latin1")
   # read meta info from header blocks
   allmeta <- plyr::adply(.data=dplyr::filter(.data=fileblocks, !val), .margins=1, .fun=function(thisblock)
   {
-    col_types <- get_block_col_types(file=file, skip = skipmeta + thisblock$start -1, encoding=encoding)
+    col_types <- get_block_col_types(file=file, skip = skipmeta + thisblock$start -1, encoding=locale()$encoding)
     # read one meta info block
     meta <- readr::read_delim(file=file, delim=";", skip = skipmeta + thisblock$start -1, n_max=thisblock$end - thisblock$start +1, na="-",
-                              locale=locale(decimal_mark = ".", date_names = "de", encoding=encoding),
+                              locale=locale,
                               col_names=F, col_types = col_types, progress=F)
     meta <- t(meta)
     meta <- meta[!apply(is.na(meta), MARGIN=1, all),] # remove empty columns
@@ -229,11 +268,11 @@ read_lila_block <- function(file, filename_metainfo=F, encoding="latin1")
   # read data blocks
   alldata <- plyr::adply(.data=dplyr::filter(.data=fileblocks, val), .margins=1, .fun=function(thisblock)
   {
-    col_types <- get_block_col_types(file=file, skip = skipmeta + thisblock$start -1, encoding=encoding)
+    col_types <- get_block_col_types(file=file, skip = skipmeta + thisblock$start -1, encoding=locale()$encoding)
     # read one data block
     data <- readr::read_delim(file=file, delim=";", skip = skipmeta + thisblock$start -1,
-                              n_max=thisblock$end - thisblock$start +1, na="-",
-                              locale=locale(decimal_mark = ".", date_names = "de", encoding=encoding, time_format="%d.%m.%Y %H:%M"),
+                              n_max=min(c(n_max=Inf, thisblock$end - thisblock$start +1)),
+                              na="-", locale=locale,
                               col_types = col_types, progress = F,
                               col_names = F)
     # set column names
@@ -257,7 +296,7 @@ read_lila_block <- function(file, filename_metainfo=F, encoding="latin1")
 
 #' Dateinamen im LEG-Format prüfen und zerlegen
 #'
-#' Die Konformatität des Dateinamens mit den Vorgaben zum LEG-Format werden geprüft. Die einzelnen Informationen im Dateinamen werden extrahiert
+#' Die Konformität des Dateinamens mit den Vorgaben zum LEG-Format werden geprüft. Die einzelnen Informationen im Dateinamen werden extrahiert
 
 #' @param filename zu prüfender Dateiname (character)
 #'
