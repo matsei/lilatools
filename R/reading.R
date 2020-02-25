@@ -82,9 +82,9 @@ read_lila_einzel <- function(file, filename_metainfo=FALSE, locale="default", n_
   # read meta block
   ####################
   # first determine length of header block
-  header_length = min(grep(pattern="^[0-9]{2}.*", scan(file, what=character(), flush=T, sep=";", skip = skipmeta, encoding = locale()$encoding, quiet = T)))-1
+  header_length = min(grep(pattern="^[0-9]{2}.*", scan(file, what=character(), flush=T, sep=";", skip = skipmeta, encoding = locale$encoding, quiet = T)))-1
   # read meta info from header block
-  meta <- scan(file=file, what=list(character(), character()), sep=";", skip = skipmeta, na.strings = "-", nlines=header_length, encoding=locale()$encoding, quiet = T)
+  meta <- scan(file=file, what=list(character(), character()), sep=";", skip = skipmeta, na.strings = "-", nlines=header_length, encoding=locale$encoding, quiet = T)
   metadf <- as.list(meta[[2]])
   names(metadf) <- meta[[1]]
   metadf <- as_tibble(metadf)
@@ -219,7 +219,7 @@ read_lila_block <- function(file, filename_metainfo=F, locale="default", n_max=I
   # read meta info from header blocks
   allmeta <- plyr::adply(.data=dplyr::filter(.data=fileblocks, !val), .margins=1, .fun=function(thisblock)
   {
-    col_types <- get_block_col_types(file=file, skip = skipmeta + thisblock$start -1, encoding=locale()$encoding)
+    col_types <- get_block_col_types(file=file, skip = skipmeta + thisblock$start -1, encoding=locale$encoding)
     # read one meta info block
     meta <- readr::read_delim(file=file, delim=";", skip = skipmeta + thisblock$start -1, n_max=thisblock$end - thisblock$start +1, na="-",
                               locale=locale,
@@ -268,7 +268,7 @@ read_lila_block <- function(file, filename_metainfo=F, locale="default", n_max=I
   # read data blocks
   alldata <- plyr::adply(.data=dplyr::filter(.data=fileblocks, val), .margins=1, .fun=function(thisblock)
   {
-    col_types <- get_block_col_types(file=file, skip = skipmeta + thisblock$start -1, encoding=locale()$encoding)
+    col_types <- get_block_col_types(file=file, skip = skipmeta + thisblock$start -1, encoding=locale$encoding)
     # read one data block
     data <- readr::read_delim(file=file, delim=";", skip = skipmeta + thisblock$start -1,
                               n_max=min(c(n_max=Inf, thisblock$end - thisblock$start +1)),
